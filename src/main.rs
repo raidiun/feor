@@ -13,14 +13,38 @@ type Colour = Vector3;
 
 mod output;
 
+#[derive(Copy,Clone)]
+enum Chroma {
+    Red = 0,
+    Green = 1,
+    Blue = 2,
+    White,
+}
+
+impl From<usize> for Chroma {
+    fn from(c: usize) -> Self {
+        match c {
+            0 => Self::Red,
+            1 => Self::Green,
+            2 => Self::Blue,
+            _ => { unreachable!() },
+        }
+    }
+}
+
 struct Ray {
     origin: Vector3,
     direction: Vector3,
+    chroma: Chroma,
 }
 
 impl Ray {
     fn new(origin: Vector3, direction: Vector3) -> Self {
-        Self { origin, direction }
+        Self { origin, direction, chroma: Chroma::White }
+    }
+
+    fn new_chroma(origin: Vector3, direction: Vector3, chroma: Chroma) -> Self {
+        Self { origin, direction, chroma }
     }
 
     fn at(&self, t: Fpr) -> Vector3 {
@@ -36,7 +60,7 @@ struct Hit<'a> {
 }
 
 mod materials;
-use materials::{Material,Diffuse,Metal,Dielectric};
+use materials::{Material,Diffuse,Metal,Dielectric,DispersiveDielectric};
 
 mod camera;
 use camera::{Camera,ViewPort};
@@ -60,16 +84,14 @@ fn get_ray_colour(ray: &Ray, scene: &Scene, depth: u32) -> Colour {
     }
 
     if let Some(hit) = scene.get_hit(ray,None,None) {
-
-        let (attenuation,scattered) = hit.material.response(ray,&hit);
-
-        if let Some(scattered) = scattered {
-            get_ray_colour(&scattered, scene, depth-1).component_mul(&attenuation)
+        let mut colour = Colour::zeros();
+        
+        let scattered_rays = hit.material.response(ray,&hit);
+        for (attenuation,scattered_ray) in scattered_rays {
+            colour += get_ray_colour(&scattered_ray, scene, depth-1).component_mul(&attenuation)
         }
-        else {
-            Colour::zeros()
-        }
-
+        
+        colour
     }
     else {
         background_colour(ray)
@@ -80,23 +102,25 @@ fn get_ray_colour(ray: &Ray, scene: &Scene, depth: u32) -> Colour {
 fn main() -> io::Result<()> {
     // Image configuration
     const ASPECT_RATIO: Fpr = 16.0 / 9.0;
-    const IMAGE_WIDTH: u32 = 1920;
+    const IMAGE_WIDTH: u32 = 400;
     const IMAGE_HEIGHT: u32 = (IMAGE_WIDTH as Fpr / ASPECT_RATIO) as u32;
 
     // World configuration
 
     // Materials
     let diffuse_red = Diffuse::new(Colour::new(1.0,0.0,0.0));
-    let diffuse_green = Diffuse::new(Colour::new(0.0,1.0,0.0));
+    let diffuse_ground = Diffuse::new(Colour::new(0.2,0.8,0.2));
     let diffuse_blue = Diffuse::new(Colour::new(0.0,0.0,1.0));
     let metal = Metal::new(Colour::new(0.8,0.8,0.8));
     let glass = Dielectric::new(Colour::new(0.9,0.8,0.9),1.5);
+    const RED_REFRAC: Fpr = 1.5;
+    let disp_glass = DispersiveDielectric::new(Colour::new(0.9,0.9,0.9),[RED_REFRAC,RED_REFRAC*0.95,RED_REFRAC*0.93]);
 
     // Bodies
-    let centre_sph = Sphere::new(Vector3::new(0.0,0.0,-1.0), 0.5, &glass);
-    let right_sph = Sphere::new(Vector3::new(1.0,0.0,-1.0), 0.2, &diffuse_blue);
-    let left_sph = Sphere::new(Vector3::new(-1.0,0.0,-1.0), 0.4, &diffuse_red);
-    let world_sph = Sphere::new(Vector3::new(0.0,-100.5,-1.0), 100.0, &diffuse_green);
+    let centre_sph = Sphere::new(Vector3::new(0.0,0.0,-1.1), 0.5, &disp_glass);
+    let right_sph = Sphere::new(Vector3::new(1.0,0.0,-1.0), 0.5, &metal);
+    let left_sph = Sphere::new(Vector3::new(-0.8,0.0,-1.8), 0.5, &diffuse_red);
+    let world_sph = Sphere::new(Vector3::new(0.0,-100.5,-1.0), 100.0, &diffuse_ground);
 
     // Camera configuration
     const VIEWPORT_HEIGHT: Fpr = 2.0;
@@ -123,8 +147,8 @@ fn main() -> io::Result<()> {
     use std::sync::{Arc,Mutex};
     let imgmutex = Arc::new(Mutex::new(img));
 
-    const PIXEL_SAMPLES: u32 = 500;
-    const MAX_DEPTH: u32 = 150;
+    const PIXEL_SAMPLES: u32 = 300;
+    const MAX_DEPTH: u32 = 10;
     const NTHREADS: u32 = 8;
 
     
