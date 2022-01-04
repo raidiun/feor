@@ -54,8 +54,14 @@ impl Metal {
 impl Material for Metal {
     fn response(&self, ray: &Ray, hit: &Hit) -> Vec<(Colour,Ray)> {
         let raynorm = ray.direction.normalize();
-        let reflected = raynorm - 2.0 * raynorm.dot(&hit.normal) * hit.normal;
-        vec![(self.colour, Ray::new(hit.position,reflected))]
+        let raydotnorm = raynorm.dot(&hit.normal);
+        if raydotnorm < 0.0 {
+            let reflected = raynorm - 2.0 * raydotnorm * hit.normal;
+            vec![(self.colour, Ray::new(hit.position,reflected))]
+        }
+        else {
+            vec![]
+        }
     }
 }
 
