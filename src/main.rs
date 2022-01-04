@@ -66,7 +66,7 @@ mod camera;
 use camera::{Camera,ViewPort};
 
 mod geometry;
-use geometry::{Sphere,RenderedBody};
+use geometry::{Sphere,Plane,RenderedBody};
 
 mod scene;
 use scene::{Scene};
@@ -102,7 +102,7 @@ fn get_ray_colour(ray: &Ray, scene: &Scene, depth: u32) -> Colour {
 fn main() -> io::Result<()> {
     // Image configuration
     const ASPECT_RATIO: Fpr = 16.0 / 9.0;
-    const IMAGE_WIDTH: u32 = 400;
+    const IMAGE_WIDTH: u32 = 1920/2;
     const IMAGE_HEIGHT: u32 = (IMAGE_WIDTH as Fpr / ASPECT_RATIO) as u32;
 
     // World configuration
@@ -112,15 +112,17 @@ fn main() -> io::Result<()> {
     let diffuse_ground = Diffuse::new(Colour::new(0.2,0.8,0.2));
     let diffuse_blue = Diffuse::new(Colour::new(0.0,0.0,1.0));
     let metal = Metal::new(Colour::new(0.8,0.8,0.8));
+    let dirty_metal = Metal::new(Colour::new(0.5,0.5,0.5));
     let glass = Dielectric::new(Colour::new(0.9,0.8,0.9),1.5);
     const RED_REFRAC: Fpr = 1.5;
-    let disp_glass = DispersiveDielectric::new(Colour::new(0.9,0.9,0.9),[RED_REFRAC,RED_REFRAC*0.95,RED_REFRAC*0.93]);
+    let disp_glass = DispersiveDielectric::new(Colour::new(0.9,0.9,0.9),[RED_REFRAC,RED_REFRAC*0.97,RED_REFRAC*0.96]);
 
     // Bodies
-    let centre_sph = Sphere::new(Vector3::new(0.0,0.0,-1.1), 0.5, &disp_glass);
+    let centre_sph = Sphere::new(Vector3::new(0.0,0.0,-1.1), 0.2, &disp_glass);
     let right_sph = Sphere::new(Vector3::new(1.0,0.0,-1.0), 0.5, &metal);
     let left_sph = Sphere::new(Vector3::new(-0.8,0.0,-1.8), 0.5, &diffuse_red);
     let world_sph = Sphere::new(Vector3::new(0.0,-100.5,-1.0), 100.0, &diffuse_ground);
+    let mirror = Plane::new(Vector3::new(-1.8,-0.5,0.0),Vector3::new(0.0,0.0,-1.0),Vector3::new(0.0,1.0,0.0),[5.0,1.0],&dirty_metal);
 
     // Camera configuration
     const VIEWPORT_HEIGHT: Fpr = 2.0;
@@ -134,7 +136,7 @@ fn main() -> io::Result<()> {
 
 
     let bodies: Vec<&dyn RenderedBody> = vec![
-        &centre_sph, &right_sph, &left_sph, &world_sph
+        &centre_sph, &right_sph, &left_sph, &world_sph, &mirror
     ]; 
     let scene = Scene {
         bodies,
@@ -147,8 +149,8 @@ fn main() -> io::Result<()> {
     use std::sync::{Arc,Mutex};
     let imgmutex = Arc::new(Mutex::new(img));
 
-    const PIXEL_SAMPLES: u32 = 300;
-    const MAX_DEPTH: u32 = 10;
+    const PIXEL_SAMPLES: u32 = 256;
+    const MAX_DEPTH: u32 = 16;
     const NTHREADS: u32 = 8;
 
     

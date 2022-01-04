@@ -63,3 +63,72 @@ impl<'a> RenderedBody<'a> for Sphere<'a> {
     }
 
 }
+
+
+pub(crate) struct Plane<'a> {
+    origin: Vector3,
+    x: Vector3,
+    y: Vector3,
+    extents: [Fpr;2],
+    material: &'a dyn Material,
+    normal: Vector3,
+}
+
+impl<'a> Plane<'a> {
+	pub fn new(origin: Vector3, x: Vector3, y: Vector3, extents: [Fpr;2], material: &'a dyn Material) -> Self {
+		Self {
+			origin,
+			x,
+            y,
+            extents,
+			material,
+            normal: x.cross(&y),
+		}
+	}
+
+}
+
+impl<'a> RenderedBody<'a> for Plane<'a> {
+    fn get_hit(&self, ray: &Ray, tmin_opt: Option<Fpr>, tmax_opt: Option<Fpr>) -> Option<Hit> {
+        let ln = self.normal.dot(&ray.direction);
+
+        if ln.abs() < 0.0001 {
+            // No sensible intersect
+            return None;
+        }
+
+        let t = (self.origin - ray.origin).dot(&self.normal) / ln;
+
+        let tmin = tmin_opt.unwrap_or(0.0001);
+        let tmax = tmax_opt.unwrap_or(Fpr::INFINITY);
+
+        if t < tmin || t > tmax {
+            return None;
+        }
+
+        let p_intersect = ray.at(t);
+
+        let inplane = p_intersect - self.origin;
+
+        let x = inplane.dot(&self.x);
+        let y = inplane.dot(&self.y);
+
+        if 0.0 < x && x < self.extents[0] && 0.0 < y && y < self.extents[1] {
+            // Within bounds
+            Some( Hit {
+                t,
+                position: p_intersect,
+                normal: self.normal,
+                material: self.get_material(),
+            })
+        }
+        else {
+            None
+        }   
+    }
+
+    fn get_material(&self) -> &'a dyn Material {
+        self.material
+    }
+
+}
